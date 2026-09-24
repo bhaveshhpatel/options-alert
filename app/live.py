@@ -31,8 +31,15 @@ class LiveAlertEngine:
     def on_event(self, event):
         key = f"{event.source}:{event.event_id}"
         with self.lock:
-            if key in self.seen or self.store.seen_event(key):
+            if key in self.seen:
                 return
+
+            # If persistent state already has this event, keep the in-memory
+            # dedupe set consistent before returning.
+            if self.store.seen_event(key):
+                self.seen.add(key)
+                return
+
             self.seen.add(key)
             self.store.save_event(key, event)
             if len(self.seen) > 100_000:
