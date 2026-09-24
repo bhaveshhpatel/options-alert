@@ -1,0 +1,53 @@
+name: Deploy always-on OCI agent
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: oci-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          OCI_SSH_KEY: ${{ secrets.OCI_SSH_KEY }}
+          OCI_HOST: ${{ secrets.OCI_HOST }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$OCI_SSH_KEY" > ~/.ssh/options-alert
+          chmod 600 ~/.ssh/options-alert
+          ssh-keyscan -H "$OCI_HOST" >> ~/.ssh/known_hosts
+
+      - name: Deploy
+        env:
+          OCI_HOST: ${{ secrets.OCI_HOST }}
+          OCI_USER: ${{ secrets.OCI_USER }}
+          STOCKTWITS_USERNAME: ${{ secrets.STOCKTWITS_USERNAME }}
+          STOCKTWITS_PASSWORD: ${{ secrets.STOCKTWITS_PASSWORD }}
+          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+          X_QUERY: ${{ vars.X_QUERY }}
+          CORRELATION_WINDOW_MINUTES: ${{ vars.CORRELATION_WINDOW_MINUTES }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/options-alert "$OCI_USER@$OCI_HOST" 'mkdir -p /opt/options-alert/data/runtime'
+          ssh -i ~/.ssh/options-alert "$OCI_USER@$OCI_HOST" 'git -C /opt/options-alert/repo pull --ff-only'
+          {
+            printf 'STOCKTWITS_USERNAME=%q\n' "$STOCKTWITS_USERNAME"
+            printf 'STOCKTWITS_PASSWORD=%q\n' "$STOCKTWITS_PASSWORD"
+            printf 'X_BEARER_TOKEN=%q\n' "$X_BEARER_TOKEN"
+            printf 'X_QUERY=%q\n' "$X_QUERY"
+            printf 'ALERT_WEBHOOK_URL=%q\n' "$ALERT_WEBHOOK_URL"
+            printf 'CORRELATION_WINDOW_MINUTES=%q\n' "$CORRELATION_WINDOW_MINUTES"
+            printf 'STATE_DB_PATH=data/runtime/agent.db\n'
+            printf 'LOG_LEVEL=INFO\n'
+          } | ssh -i ~/.ssh/options-alert "$OCI_USER@$OCI_HOST" 'cat > /opt/options-alert/repo/.env && chmod 600 /opt/options-alert/repo/.env'
+          ssh -i ~/.ssh/options-alert "$OCI_USER@$OCI_HOST" 'cd /opt/options-alert/repo && ln -sfn /opt/options-alert/data/runtime data/runtime && docker compose up -d --build --remove-orphans && docker compose ps'
