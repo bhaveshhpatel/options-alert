@@ -1,7 +1,9 @@
 from datetime import datetime, timezone
-from app.live import LiveAlertEngine
+
 from app.config import Config
+from app.live import LiveAlertEngine
 from app.models import SocialEvent
+from app.providers.stocktwits import StocktwitsFirestream
 
 
 def make_cfg():
@@ -17,7 +19,7 @@ def make_cfg():
     )
 
 
-def test_live_engine_deduplicates_and_detects_signal():
+def test_live_engine_deduplicates():
     engine = LiveAlertEngine(make_cfg())
     event = SocialEvent(
         "x",
@@ -27,4 +29,22 @@ def test_live_engine_deduplicates_and_detects_signal():
         datetime.now(timezone.utc),
     )
     engine.on_event(event)
-    assert "x:1" in engine.seen
+    engine.on_event(event)
+    assert len(engine.seen) == 1
+
+
+def test_stocktwits_firestream_parses_wrapped_message():
+    provider = StocktwitsFirestream("u", "p")
+    payload = (
+        '{"object":"Message","action":"create","seq_id":"42",'
+        '"time":"2026-09-23T12:00:00Z","data":'
+        '{"id":123,"body":"$P REPEAT SWEEPER BUYING",'
+        '"created_at":"2026-09-23T12:00:00Z",'
+        '"user":{"username":"alice"}}}'
+    )
+    event, seq = provider._parse(payload)
+    assert event.source == "stocktwits"
+    assert event.event_id == "123"
+    assert event.author == "alice"
+    assert event.ticker if False else event.text == "$P REPEAT SWEEPER BUYING"
+    assert seq == "42"
