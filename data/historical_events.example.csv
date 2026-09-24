@@ -1,0 +1,3 @@
+event_id,source,author,ticker,text,created_at,url
+1,stocktwits,example_author,P,$P REPEAT SWEEPER BUYING,2026-01-02T15:00:00Z,
+2,x,example_other,P,$P repeat buying,2026-01-02T15:10:00Z,https://x.com/example
