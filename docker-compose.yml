@@ -1,0 +1,8 @@
+services:
+  flow-agent:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data/runtime:/app/data/runtime
