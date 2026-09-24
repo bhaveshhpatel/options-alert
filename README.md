@@ -1,29 +1,63 @@
 # WallStJesus Flow Alert Agent
 
-Research and alerting application for studying social-media flow signals. It does not place trades.
+Research and real-time alerting application for studying social-media flow signals. It does not place trades or submit orders.
 
-## Live providers
+## Real-time alerting
 
-- Stocktwits Firestream: optional
-- X Recent Search: optional
-- Signal detector for repeat activity / sweeper-style language
-- Cross-source correlation with configurable ecosystem grouping
-- Webhook alerts
-- GitHub Actions scheduled monitor
+The live service processes events as they arrive:
 
-If X credentials are missing, the X adapter is skipped. The runner can therefore operate with Stocktwits only. If both providers are missing, it exits cleanly after logging that no live providers are configured.
+- **Stocktwits Firestream:** persistent Server-Sent Events connection with reconnect/backoff and Firestream `seq_id` cursor support.
+- **X Recent Search:** optional polling adapter; it is not a true push stream.
+- **Immediate signal alerts:** a detected signal is sent to the configured webhook immediately.
+- **Cross-source alerts:** when another author/source corroborates a signal within the configured window, a second correlation alert is emitted.
+- **In-memory deduplication:** repeated provider deliveries are ignored during the process lifetime.
+- **Graceful degradation:** each provider can be enabled independently.
 
-Never commit credentials. Use environment variables or GitHub Actions Secrets.
+Start locally:
+
+    python -m app.live
+
+Or:
+
+    python -m app.runner --live
+
+Docker:
+
+    docker compose up -d --build
+
+Required environment variables depend on the providers you enable:
+
+    STOCKTWITS_USERNAME=
+    STOCKTWITS_PASSWORD=
+    X_BEARER_TOKEN=
+    X_QUERY=("sweeper" OR "repeat buying" OR "repeat activity") -is:retweet
+    X_POLL_SECONDS=30
+    ALERT_WEBHOOK_URL=
+    CORRELATION_WINDOW_MINUTES=360
+
+Never commit credentials. Use environment variables, a secret manager, or GitHub Actions Secrets.
+
+### Stocktwits availability
+
+The code supports the documented, authorized Stocktwits Firestream interface. Stocktwits currently says it is reviewing its API program and is not accepting new API registrations; its current subscription page lists API access under Enterprise. Therefore the repository does **not** scrape Stocktwits or bypass authentication. If you already have authorized Firestream access, configure the credentials and the live service can consume the stream.
+
+## GitHub Actions
+
+The scheduled workflow remains useful for bounded polling/recovery/research jobs. GitHub documents a minimum scheduled-workflow interval of 5 minutes, so it is **not** the component to use for second-by-second streaming.
+
+For continuous real-time monitoring, run `app.live` as a long-lived container/service. The included Dockerfile and docker-compose.yml are the deployment starting point.
 
 ## Historical research / backtest
 
 The historical engine is offline and does not require API credentials.
 
 Social-event CSV columns:
-event_id,source,author,ticker,text,created_at,url
+
+    event_id,source,author,ticker,text,created_at,url
 
 OHLC CSV columns:
-ticker,date,open,high,low,close
+
+    ticker,date,open,high,low,close
 
 Run:
 
@@ -37,9 +71,7 @@ Outputs:
 
 The engine evaluates +1, +3, +5, and +7 trading-day forward returns, plus maximum favorable excursion (MFE) and maximum adverse excursion (MAE). It uses trading rows rather than calendar-day offsets.
 
-Example files are included under data/.
-
-## Important research controls
+## Research controls
 
 Historical results should be interpreted with timestamp accuracy, timezone normalization, source/account independence, repost/duplicate handling, look-ahead bias prevention, survivorship bias, catalyst/event controls, market/sector benchmarks, delisted symbols, ticker changes, and realistic entry/liquidity assumptions.
 
