@@ -19,3 +19,4 @@ class Config:
     correlation_window_minutes: int = int(os.getenv("CORRELATION_WINDOW_MINUTES", "360"))
     x_poll_seconds: int = int(os.getenv("X_POLL_SECONDS", "30"))
     live_mode: bool = os.getenv("LIVE_MODE", "false").lower() in {"1", "true", "yes"}
+    state_db_path: str = os.getenv("STATE_DB_PATH", "data/runtime/agent.db")
