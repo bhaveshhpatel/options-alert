@@ -12,6 +12,7 @@ from .detector import detect
 from .providers.stocktwits import StocktwitsFirestream
 from .providers.x_api import XRecentSearch
 from .state import StateStore
+from .whatsapp import send_whatsapp_text
 
 log = logging.getLogger("flow-agent.live")
 
@@ -86,15 +87,76 @@ class LiveAlertEngine:
                 self._send(format_alert(cluster), correlation=True, alert_key=f"correlation:{key}")
 
     def _send(self, payload, correlation=False, alert_key=None):
-        if alert_key and not self.store.save_alert(alert_key, "correlation" if correlation else "signal", payload.get("ticker",""), payload):
+        if alert_key and not self.store.save_alert(
+            alert_key,
+            "correlation" if correlation else "signal",
+            payload.get("ticker", ""),
+            payload,
+        ):
             return
-        if not self.cfg.alert_webhook_url:
-            log.info("%s alert: %s", "correlation" if correlation else "signal", payload)
-            return
-        try:
-            send_webhook(self.cfg.alert_webhook_url, payload)
-        except Exception:
-            log.exception("Webhook delivery failed")
+
+        delivered = False
+
+        if self.cfg.alert_webhook_url:
+            try:
+                send_webhook(self.cfg.alert_webhook_url, payload)
+                delivered = True
+            except Exception:
+                log.exception("Webhook delivery failed")
+
+        if self.cfg.whatsapp_access_token and self.cfg.whatsapp_phone_number_id:
+            recipients = [
+                value.strip()
+                for value in self.cfg.whatsapp_to.split(",")
+                if value.strip()
+            ]
+            if not recipients:
+                log.warning(
+                    "WhatsApp credentials are configured but WHATSAPP_TO is empty; "
+                    "WhatsApp delivery is disabled."
+                )
+            else:
+                try:
+                    send_whatsapp_text(
+                        self.cfg.whatsapp_access_token,
+                        self.cfg.whatsapp_phone_number_id,
+                        recipients,
+                        _whatsapp_message(payload, correlation=correlation),
+                    )
+                    delivered = True
+                except Exception:
+                    log.exception("WhatsApp delivery failed")
+
+        if not delivered:
+            log.info(
+                "%s alert: %s",
+                "correlation" if correlation else "signal",
+                payload,
+            )
+
+
+def _whatsapp_message(payload, correlation=False):
+    """Render a compact WhatsApp-safe text alert."""
+    ticker = payload.get("ticker", "?")
+    signal = payload.get("signal", "flow_cluster" if correlation else "signal")
+    direction = payload.get("direction", "")
+    confidence = payload.get("confidence")
+    source = payload.get("source") or payload.get("lead_source", "")
+    author = payload.get("author") or payload.get("lead_author", "")
+    text = payload.get("text") or payload.get("lead_text", "")
+    url = payload.get("url", "")
+
+    lines = [
+        f"FLOW ALERT | {ticker}",
+        f"Signal: {signal}",
+        f"Direction: {direction}" if direction else None,
+        f"Confidence: {confidence}" if confidence is not None else None,
+        f"Source: {source} | Author: {author}" if source or author else None,
+        f"Text: {text}" if text else None,
+        f"URL: {url}" if url else None,
+        "Research alert only; not a trade instruction.",
+    ]
+    return "\n".join(line for line in lines if line)
 
 
 def run_live():
