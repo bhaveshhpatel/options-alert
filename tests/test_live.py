@@ -46,5 +46,5 @@ def test_stocktwits_firestream_parses_wrapped_message():
     assert event.source == "stocktwits"
     assert event.event_id == "123"
     assert event.author == "alice"
-    assert event.ticker if False else event.text == "$P REPEAT SWEEPER BUYING"
+    assert event.text == "$P REPEAT SWEEPER BUYING"
     assert seq == "42"
