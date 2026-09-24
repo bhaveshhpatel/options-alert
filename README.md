@@ -10,7 +10,7 @@ The live service processes events as they arrive:
 - **X Recent Search:** optional polling adapter; it is not a true push stream.
 - **Immediate signal alerts:** a detected signal is sent to the configured webhook immediately.
 - **Cross-source alerts:** when another author/source corroborates a signal within the configured window, a second correlation alert is emitted.
-- **In-memory deduplication:** repeated provider deliveries are ignored during the process lifetime.
+- **Persistent local state:** SQLite stores processed events, signals, alerts, and provider cursors.
 - **Graceful degradation:** each provider can be enabled independently.
 
 Start locally:
@@ -43,7 +43,17 @@ The code supports the documented, authorized Stocktwits Firestream interface. St
 
 ## GitHub Actions
 
-The scheduled workflow remains useful for bounded polling/recovery/research jobs. GitHub documents a minimum scheduled-workflow interval of 5 minutes, so it is **not** the component to use for second-by-second streaming.
+The repository includes a **5-minute scheduled fallback monitor** so collection can begin immediately while a true always-on deployment is being arranged. GitHub scheduled workflows are not guaranteed to start exactly every five minutes and are not suitable for second-by-second streaming.
+
+Each run:
+
+1. Restores the latest `flow-agent-state` artifact.
+2. Runs tests.
+3. Monitors providers for up to 3 minutes.
+4. Uploads the updated SQLite state.
+5. Deletes superseded state artifacts.
+
+The workflow uses GitHub Actions artifacts for interim persistence, so the SQLite database is **not committed to the repository**. Artifact retention is currently configured for 7 days. The workflow is serialized to avoid concurrent state updates.
 
 For continuous real-time monitoring, run `app.live` as a long-lived container/service. The included Dockerfile and docker-compose.yml are the deployment starting point.
 
