@@ -152,4 +152,4 @@ Deploy from Deplexo:
 
 **Persistence note:** the alert engine's SQLite database is written to `data/runtime/agent.db`. The Deplexo deployment configuration does not assume a persistent-volume feature that is not documented by Deplexo. Therefore, treat SQLite persistence on Deplexo as container-local unless the Deplexo dashboard explicitly provides persistent storage for the deployed app. The GitHub Actions 5-minute fallback remains enabled and continues to use its own artifact-backed state.
 
-The existing `.github/workflows/monitor.yml` is intentionally unchanged and remains the fallback monitor.
+The existing `.github/workflows/monitor.yml` remains the fallback monitor and now passes the optional WhatsApp configuration through to the live service.
