@@ -15,8 +15,11 @@ def evaluate_signal(signal_time, prices, horizons=(1, 3, 5, 7)):
 
     t = pd.Timestamp(signal_time)
     t = t.tz_localize(None) if t.tzinfo else t
+    # Price data is daily, so an intraday signal timestamp maps to its
+    # calendar day's trading row.
+    signal_date = t.normalize()
 
-    base = p[p["date"] >= t]
+    base = p[p["date"] >= signal_date]
     if base.empty:
         return {}
 
