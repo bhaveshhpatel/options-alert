@@ -15,6 +15,9 @@ class Config:
         '("sweeper" OR "repeat buying" OR "repeat activity") -is:retweet',
     )
     alert_webhook_url: str = os.getenv("ALERT_WEBHOOK_URL", "")
+    whatsapp_access_token: str = os.getenv("WHATSAPP_ACCESS_TOKEN", "")
+    whatsapp_phone_number_id: str = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "")
+    whatsapp_to: str = os.getenv("WHATSAPP_TO", "")
     provider_runtime_seconds: int = int(os.getenv("PROVIDER_RUNTIME_SECONDS", "180"))
     correlation_window_minutes: int = int(os.getenv("CORRELATION_WINDOW_MINUTES", "360"))
     x_poll_seconds: int = int(os.getenv("X_POLL_SECONDS", "30"))
