@@ -4,5 +4,8 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      LOG_LEVEL: INFO
     volumes:
       - ./data/runtime:/app/data/runtime
+    stop_grace_period: 30s
