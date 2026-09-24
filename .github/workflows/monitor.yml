@@ -59,6 +59,11 @@ jobs:
           X_QUERY: ${{ vars.X_QUERY }}
           X_POLL_SECONDS: '30'
           ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+          WHATSAPP_ACCESS_TOKEN: ${{ secrets.WHATSAPP_ACCESS_TOKEN }}
+          WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}
+          WHATSAPP_TO: ${{ secrets.WHATSAPP_TO }}
+          WHATSAPP_GRAPH_API_VERSION: ${{ vars.WHATSAPP_GRAPH_API_VERSION }}
+          WHATSAPP_API_URL: ${{ secrets.WHATSAPP_API_URL }}
           PROVIDER_RUNTIME_SECONDS: '180'
           CORRELATION_WINDOW_MINUTES: ${{ vars.CORRELATION_WINDOW_MINUTES }}
           STATE_DB_PATH: data/runtime/agent.db
