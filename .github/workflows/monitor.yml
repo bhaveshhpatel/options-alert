@@ -6,9 +6,10 @@ on:
     # GitHub Actions' practical minimum for scheduled workflows is 5 minutes.
     - cron: '*/5 * * * *'
 
+# Serialize runs so state is never read/written concurrently.
 concurrency:
   group: flow-monitor
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   monitor:
@@ -16,14 +17,40 @@ jobs:
     timeout-minutes: 4
     permissions:
       contents: read
+      actions: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: pip
+
+      - name: Restore persistent state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p data/runtime
+          artifact_id="$(
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=flow-agent-state&per_page=100" |
+              jq -r '.artifacts[] | select(.expired == false) | [.created_at, .id] | @tsv' |
+              sort -r |
+              head -n 1 |
+              cut -f2
+          )"
+          if [ -n "${artifact_id:-}" ]; then
+            echo "Restoring state artifact ${artifact_id}"
+            gh api               -H "Accept: application/vnd.github+json"               "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip"               > /tmp/flow-agent-state.zip
+            unzip -o /tmp/flow-agent-state.zip -d data/runtime
+            test -f data/runtime/agent.db
+          else
+            echo "No previous state artifact found; starting with a new state DB."
+          fi
+
       - run: pip install -r requirements.txt
       - run: pytest -q
+
       - name: Monitor for up to 3 minutes
         env:
           STOCKTWITS_USERNAME: ${{ secrets.STOCKTWITS_USERNAME }}
@@ -36,3 +63,31 @@ jobs:
           CORRELATION_WINDOW_MINUTES: ${{ vars.CORRELATION_WINDOW_MINUTES }}
           STATE_DB_PATH: data/runtime/agent.db
         run: python -m app.runner
+
+      - name: Persist state artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flow-agent-state
+          path: data/runtime/agent.db
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Remove superseded state artifacts
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ids="$(
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=flow-agent-state&per_page=100" |
+              jq -r '.artifacts[] | select(.expired == false) | [.created_at, .id] | @tsv' |
+              sort -r |
+              tail -n +2 |
+              cut -f2
+          )"
+          for id in $ids; do
+            echo "Deleting superseded state artifact $id"
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}" >/dev/null
+          done
