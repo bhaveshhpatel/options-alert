@@ -1,0 +1,27 @@
+name: Flow Monitor
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run one monitoring pass
+        env:
+          STOCKTWITS_USERNAME: ${{ secrets.STOCKTWITS_USERNAME }}
+          STOCKTWITS_PASSWORD: ${{ secrets.STOCKTWITS_PASSWORD }}
+          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+          MASSIVE_API_KEY: ${{ secrets.MASSIVE_API_KEY }}
+          TRADESTIE_API_KEY: ${{ secrets.TRADESTIE_API_KEY }}
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+        run: python -m app.agent
