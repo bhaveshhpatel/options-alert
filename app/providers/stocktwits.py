@@ -5,6 +5,10 @@ from requests.auth import HTTPBasicAuth
 from ..models import SocialEvent
 
 
+class StocktwitsAuthError(RuntimeError):
+    """Raised when Firestream rejects the configured credentials."""
+
+
 class StocktwitsFirestream:
     def __init__(self, username, password, url="https://firestream.stocktwits.com/stream"):
         self.username, self.password, self.url = username, password, url
@@ -36,6 +40,12 @@ class StocktwitsFirestream:
             stream=True,
             timeout=(15, read_timeout),
         ) as response:
+            if response.status_code == 401:
+                raise StocktwitsAuthError(
+                    "Stocktwits Firestream returned HTTP 401 Unauthorized. "
+                    "The configured credentials are not authorized for Firestream. "
+                    "Verify the login and that the Stocktwits account has Firestream access."
+                )
             response.raise_for_status()
             data_lines = []
             current_seq = seq_id
