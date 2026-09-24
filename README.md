@@ -4,10 +4,11 @@ Research and real-time alerting application for studying social-media flow signa
 
 ## Real-time alerting
 
-The live service processes events as they arrive:
+The live service processes events as they arrive or are discovered by short-interval polling:
 
-- **Stocktwits Firestream:** persistent Server-Sent Events connection with reconnect/backoff and Firestream `seq_id` cursor support.
-- **X Recent Search:** optional polling adapter; it is not a true push stream.
+- **Stocktwits Firestream:** persistent Server-Sent Events connection with reconnect/backoff and Firestream `seq_id` cursor support. This requires authorized Firestream access.
+- **X Recent Search:** optional polling adapter. The default query explicitly includes `WallStJesus`; it can be overridden with `X_QUERY`.
+- **Public RSS/Atom feeds:** optional standards-based polling adapter for sources that publish a public feed. It fetches the feed document only; it does not scrape HTML or bypass login/paywalls.
 - **Immediate signal alerts:** a detected signal is sent to the configured webhook and/or WhatsApp immediately.
 - **Cross-source alerts:** when another author/source corroborates a signal within the configured window, a second correlation alert is emitted.
 - **Optional WhatsApp delivery:** alerts can be sent through the Meta WhatsApp Cloud API without changing the existing webhook path.
@@ -33,6 +34,8 @@ Required environment variables depend on the providers you enable:
     X_BEARER_TOKEN=
     X_QUERY=("sweeper" OR "repeat buying" OR "repeat activity") -is:retweet
     X_POLL_SECONDS=30
+    PUBLIC_FEED_URLS=
+    PUBLIC_FEED_POLL_SECONDS=30
     ALERT_WEBHOOK_URL=
     WHATSAPP_ACCESS_TOKEN=
     WHATSAPP_PHONE_NUMBER_ID=
@@ -61,6 +64,17 @@ The application sends a text message containing the ticker, signal, direction/co
 For GitHub Actions, add `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, and `WHATSAPP_TO` as repository secrets. `WHATSAPP_GRAPH_API_VERSION` can be a repository variable if you need to override the default. The WhatsApp credentials are optional; leaving them unset keeps the existing webhook behavior unchanged.
 
 Meta's WhatsApp Business Platform also has messaging-policy/template requirements that can affect when a business can initiate free-form messages. The code deliberately does not attempt to bypass those rules.
+
+### Public RSS/Atom feeds
+
+You can configure one or more public RSS/Atom feed URLs with `PUBLIC_FEED_URLS`, separated by commas. This is useful for a source that publishes a public feed and gives the agent a free, standards-based ingestion path without HTML scraping.
+
+Example:
+
+    PUBLIC_FEED_URLS=https://example.com/feed.xml,https://example.org/atom.xml
+    PUBLIC_FEED_POLL_SECONDS=30
+
+A feed is treated as an input source, not as proof that a signal is correct. The existing detector, deduplication, correlation, persistence, and research tooling remain downstream of the source adapter.
 
 ### Stocktwits availability
 
@@ -139,7 +153,9 @@ Deploy from Deplexo:
    - `STOCKTWITS_USERNAME`
    - `STOCKTWITS_PASSWORD`
    - `X_BEARER_TOKEN` (optional)
-   - `X_QUERY` (optional)
+   - `X_QUERY` (optional; defaults to a WallStJesus + flow-language search)
+   - `PUBLIC_FEED_URLS` (optional; comma-separated public RSS/Atom URLs)
+   - `PUBLIC_FEED_POLL_SECONDS` (optional)
    - `ALERT_WEBHOOK_URL` (optional)
    - `WHATSAPP_ACCESS_TOKEN` (optional)
    - `WHATSAPP_PHONE_NUMBER_ID` (optional)
