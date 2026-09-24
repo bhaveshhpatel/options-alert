@@ -32,7 +32,7 @@ Required environment variables depend on the providers you enable:
     STOCKTWITS_USERNAME=
     STOCKTWITS_PASSWORD=
     X_BEARER_TOKEN=
-    X_QUERY=("sweeper" OR "repeat buying" OR "repeat activity") -is:retweet
+    X_QUERY=(from:WallStJesus OR "WallStJesus" OR "sweeper" OR "repeat buying" OR "repeat activity") -is:retweet
     X_POLL_SECONDS=30
     PUBLIC_FEED_URLS=
     PUBLIC_FEED_POLL_SECONDS=30
