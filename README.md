@@ -8,8 +8,9 @@ The live service processes events as they arrive:
 
 - **Stocktwits Firestream:** persistent Server-Sent Events connection with reconnect/backoff and Firestream `seq_id` cursor support.
 - **X Recent Search:** optional polling adapter; it is not a true push stream.
-- **Immediate signal alerts:** a detected signal is sent to the configured webhook immediately.
+- **Immediate signal alerts:** a detected signal is sent to the configured webhook and/or WhatsApp immediately.
 - **Cross-source alerts:** when another author/source corroborates a signal within the configured window, a second correlation alert is emitted.
+- **Optional WhatsApp delivery:** alerts can be sent through the Meta WhatsApp Cloud API without changing the existing webhook path.
 - **Persistent local state:** SQLite stores processed events, signals, alerts, and provider cursors.
 - **Graceful degradation:** each provider can be enabled independently.
 
@@ -33,9 +34,33 @@ Required environment variables depend on the providers you enable:
     X_QUERY=("sweeper" OR "repeat buying" OR "repeat activity") -is:retweet
     X_POLL_SECONDS=30
     ALERT_WEBHOOK_URL=
+    WHATSAPP_ACCESS_TOKEN=
+    WHATSAPP_PHONE_NUMBER_ID=
+    WHATSAPP_TO=15551234567
+    WHATSAPP_GRAPH_API_VERSION=v23.0
+    WHATSAPP_API_URL=
     CORRELATION_WINDOW_MINUTES=360
 
 Never commit credentials. Use environment variables, a secret manager, or GitHub Actions Secrets.
+
+
+### Optional WhatsApp alerts
+
+WhatsApp delivery is independent of `ALERT_WEBHOOK_URL`. You can use either channel or both.
+
+Configure these environment variables/secrets:
+
+- `WHATSAPP_ACCESS_TOKEN` — Meta WhatsApp Cloud API access token.
+- `WHATSAPP_PHONE_NUMBER_ID` — the WhatsApp Business phone-number ID used by the Cloud API.
+- `WHATSAPP_TO` — destination phone number(s) in international format, comma-separated for multiple recipients.
+- `WHATSAPP_GRAPH_API_VERSION` — optional Graph API version; defaults to `v23.0`.
+- `WHATSAPP_API_URL` — optional full API endpoint override; normally leave blank.
+
+The application sends a text message containing the ticker, signal, direction/confidence when available, source/author, source text, URL, and the research-only disclaimer. It truncates the message to WhatsApp's text-message size limit.
+
+For GitHub Actions, add `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, and `WHATSAPP_TO` as repository secrets. `WHATSAPP_GRAPH_API_VERSION` can be a repository variable if you need to override the default. The WhatsApp credentials are optional; leaving them unset keeps the existing webhook behavior unchanged.
+
+Meta's WhatsApp Business Platform also has messaging-policy/template requirements that can affect when a business can initiate free-form messages. The code deliberately does not attempt to bypass those rules.
 
 ### Stocktwits availability
 
@@ -115,7 +140,12 @@ Deploy from Deplexo:
    - `STOCKTWITS_PASSWORD`
    - `X_BEARER_TOKEN` (optional)
    - `X_QUERY` (optional)
-   - `ALERT_WEBHOOK_URL`
+   - `ALERT_WEBHOOK_URL` (optional)
+   - `WHATSAPP_ACCESS_TOKEN` (optional)
+   - `WHATSAPP_PHONE_NUMBER_ID` (optional)
+   - `WHATSAPP_TO` (optional)
+   - `WHATSAPP_GRAPH_API_VERSION` (optional)
+   - `WHATSAPP_API_URL` (optional)
    - `CORRELATION_WINDOW_MINUTES` (optional)
    - `STATE_DB_PATH=data/runtime/agent.db` (optional; this is already the application default)
 5. Confirm the Deplexo logs show `Live alert service started` and the health endpoint responds.
