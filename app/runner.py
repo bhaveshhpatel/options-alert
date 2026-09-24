@@ -4,6 +4,7 @@ import sys
 from .config import Config
 from .providers.stocktwits import StocktwitsFirestream
 from .providers.x_api import XRecentSearch
+from .providers.public_feed import PublicFeed
 from .detector import detect
 from .correlator import correlate
 from .alerts import send_webhook, format_alert
@@ -30,6 +31,11 @@ def collect(cfg):
             events += XRecentSearch(cfg.x_bearer_token, cfg.x_query).events()
         except Exception:
             log.exception("X recent search failed")
+    for url in cfg.public_feed_urls:
+        try:
+            events += PublicFeed(url).events()
+        except Exception:
+            log.exception("Public feed failed: %s", url)
     return events
 
 
