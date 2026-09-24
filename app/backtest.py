@@ -2,44 +2,35 @@ import pandas as pd
 
 
 def evaluate_signal(signal_time, prices, horizons=(1, 3, 5, 7)):
-    """Evaluate forward trading-day performance from the signal day's open.
-
-    The signal timestamp is mapped to the first trading row on/after the
-    signal timestamp. Entry is that row's open; horizon returns use closes
-    of the next h trading rows. This avoids accidentally using the signal
-    day's close when the signal occurs intraday.
-    """
+    """Evaluate forward trading-day performance from the signal day's open."""
     p = prices.copy()
     p["date"] = pd.to_datetime(p["date"]).dt.tz_localize(None)
     p = p.sort_values("date").reset_index(drop=True)
 
     t = pd.Timestamp(signal_time)
     t = t.tz_localize(None) if t.tzinfo else t
-    # Price data is daily, so an intraday signal timestamp maps to its
-    # calendar day's trading row.
     signal_date = t.normalize()
 
     base = p[p["date"] >= signal_date]
     if base.empty:
         return {}
 
-    entry_row = base.iloc[0]
-    entry = float(entry_row["open"])
+    entry = float(base.iloc[0]["open"])
     future = base.iloc[1:]
     returns = {}
 
     for h in horizons:
         if len(future) >= h:
-            returns[h] = float(future.iloc[h - 1]["close"] / entry - 1)
+            returns[h] = round(float(future.iloc[h - 1]["close"] / entry - 1), 10)
 
     w = future.head(max(horizons))
     mfe = (
-        float((w["high"] / entry - 1).max())
+        round(float((w["high"] / entry - 1).max()), 10)
         if "high" in w.columns and len(w)
         else None
     )
     mae = (
-        float((w["low"] / entry - 1).min())
+        round(float((w["low"] / entry - 1).min()), 10)
         if "low" in w.columns and len(w)
         else None
     )
