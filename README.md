@@ -86,3 +86,8 @@ The engine evaluates +1, +3, +5, and +7 trading-day forward returns, plus maximu
 Historical results should be interpreted with timestamp accuracy, timezone normalization, source/account independence, repost/duplicate handling, look-ahead bias prevention, survivorship bias, catalyst/event controls, market/sector benchmarks, delisted symbols, ticker changes, and realistic entry/liquidity assumptions.
 
 This repository is for research and alerting, not trade execution.
+
+
+## Free always-on deployment
+
+The recommended deployment target is an OCI Always Free Ampere A1 Linux VM. See `deploy/oci/README.md`. The repository includes a bootstrap script and a manual GitHub Actions deployment workflow at `.github/workflows/deploy-oci.yml`.
