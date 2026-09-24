@@ -11,6 +11,7 @@ from .correlator import correlate
 from .detector import detect
 from .providers.stocktwits import StocktwitsFirestream
 from .providers.x_api import XRecentSearch
+from .state import StateStore
 
 log = logging.getLogger("flow-agent.live")
 
@@ -20,6 +21,7 @@ class LiveAlertEngine:
 
     def __init__(self, cfg):
         self.cfg = cfg
+        self.store = StateStore(cfg.state_db_path)
         self.seen = set()
         self.recent = defaultdict(deque)
         self.lock = threading.Lock()
@@ -28,15 +30,18 @@ class LiveAlertEngine:
     def on_event(self, event):
         key = f"{event.source}:{event.event_id}"
         with self.lock:
-            if key in self.seen:
+            if key in self.seen or self.store.seen_event(key):
                 return
             self.seen.add(key)
+            self.store.save_event(key, event)
             if len(self.seen) > 100_000:
                 self.seen = set(list(self.seen)[-50_000:])
 
         signal = detect(event)
         if not signal:
             return
+
+        self.store.save_signal(key, signal)
 
         # Alert immediately: this is independent of cross-source confirmation.
         payload = {
@@ -52,7 +57,7 @@ class LiveAlertEngine:
             "url": signal.social.url,
             "disclaimer": "Research alert only; not a trade instruction.",
         }
-        self._send(payload)
+        self._send(payload, alert_key=f"signal:{key}")
 
         with self.lock:
             cutoff = signal.social.created_at - timedelta(
@@ -78,9 +83,11 @@ class LiveAlertEngine:
                     if key in self.sent_correlations:
                         continue
                     self.sent_correlations.add(key)
-                self._send(format_alert(cluster), correlation=True)
+                self._send(format_alert(cluster), correlation=True, alert_key=f"correlation:{key}")
 
-    def _send(self, payload, correlation=False):
+    def _send(self, payload, correlation=False, alert_key=None):
+        if alert_key and not self.store.save_alert(alert_key, "correlation" if correlation else "signal", payload.get("ticker",""), payload):
+            return
         if not self.cfg.alert_webhook_url:
             log.info("%s alert: %s", "correlation" if correlation else "signal", payload)
             return
@@ -132,7 +139,7 @@ def run_live():
 
 def _stocktwits_loop(cfg, engine):
     backoff = 2
-    seq_id = os.getenv("STOCKTWITS_SEQ_ID", "") or None
+    seq_id = engine.store.get_cursor("stocktwits") or os.getenv("STOCKTWITS_SEQ_ID", "") or None
 
     while True:
         try:
@@ -146,6 +153,7 @@ def _stocktwits_loop(cfg, engine):
             ):
                 if next_seq:
                     seq_id = next_seq
+                    engine.store.set_cursor("stocktwits", seq_id)
                 engine.on_event(event)
             backoff = 2
         except Exception:
