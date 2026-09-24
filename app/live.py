@@ -97,6 +97,15 @@ class LiveAlertEngine:
 
         delivered = False
 
+        # Always print alerts to stdout. This is the primary no-setup alert
+        # channel and makes GitHub Actions logs useful even when every
+        # external notification provider is disabled.
+        log.warning(
+            "🚨 FLOW ALERT | %s | %s",
+            payload.get("ticker", "?"),
+            _console_alert_summary(payload, correlation=correlation),
+        )
+
         if self.cfg.alert_webhook_url:
             try:
                 send_webhook(self.cfg.alert_webhook_url, payload)
@@ -133,6 +142,28 @@ class LiveAlertEngine:
                 "correlation" if correlation else "signal",
                 payload,
             )
+
+
+def _console_alert_summary(payload, correlation=False):
+    ticker = payload.get("ticker", "?")
+    signal = payload.get("signal", "flow_cluster" if correlation else "signal")
+    direction = payload.get("direction", "")
+    confidence = payload.get("confidence")
+    source = payload.get("source") or payload.get("lead_source", "")
+    author = payload.get("author") or payload.get("lead_author", "")
+    text = (payload.get("text") or payload.get("lead_text", "")).replace("\\n", " ")
+    if len(text) > 240:
+        text = text[:237] + "..."
+    parts = [signal]
+    if direction:
+        parts.append(direction)
+    if confidence is not None:
+        parts.append(f"confidence={confidence}")
+    if source or author:
+        parts.append(f"{source}/{author}")
+    if text:
+        parts.append(text)
+    return " | ".join(parts)
 
 
 def _whatsapp_message(payload, correlation=False):
