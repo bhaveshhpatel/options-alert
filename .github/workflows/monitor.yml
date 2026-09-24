@@ -60,6 +60,8 @@ jobs:
           X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
           X_QUERY: ${{ vars.X_QUERY }}
           X_POLL_SECONDS: '30'
+          PUBLIC_FEED_URLS: ${{ vars.PUBLIC_FEED_URLS }}
+          PUBLIC_FEED_POLL_SECONDS: '30'
           ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
           WHATSAPP_ACCESS_TOKEN: ${{ secrets.WHATSAPP_ACCESS_TOKEN }}
           WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}
