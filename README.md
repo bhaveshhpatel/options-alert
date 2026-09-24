@@ -91,3 +91,35 @@ This repository is for research and alerting, not trade execution.
 ## Free always-on deployment
 
 The recommended deployment target is an OCI Always Free Ampere A1 Linux VM. See `deploy/oci/README.md`. The repository includes a bootstrap script and a manual GitHub Actions deployment workflow at `.github/workflows/deploy-oci.yml`.
+
+
+## Deplexo always-on deployment
+
+Deplexo can connect directly to this GitHub repository and automatically redeploy on pushes. The repository now includes `deplexo.yaml` and a Deplexo-specific entrypoint.
+
+The Deplexo container:
+
+- runs the same `app.live` real-time alert engine;
+- exposes a lightweight `/health` endpoint on Deplexo's `PORT`;
+- keeps the existing Stocktwits/X provider reconnect behavior;
+- uses the existing environment variables and SQLite state path;
+- does not require a GitHub Personal Access Token for the GitHub-to-Deplexo connection.
+
+Deploy from Deplexo:
+
+1. Sign in to Deplexo and connect GitHub via OAuth.
+2. Select `bhaveshhpatel/options-alert`.
+3. Deploy the repository using the committed `deplexo.yaml`.
+4. Add the runtime environment variables/secrets in Deplexo's dashboard:
+   - `STOCKTWITS_USERNAME`
+   - `STOCKTWITS_PASSWORD`
+   - `X_BEARER_TOKEN` (optional)
+   - `X_QUERY` (optional)
+   - `ALERT_WEBHOOK_URL`
+   - `CORRELATION_WINDOW_MINUTES` (optional)
+   - `STATE_DB_PATH=data/runtime/agent.db` (optional; this is already the application default)
+5. Confirm the Deplexo logs show `Live alert service started` and the health endpoint responds.
+
+**Persistence note:** the alert engine's SQLite database is written to `data/runtime/agent.db`. The Deplexo deployment configuration does not assume a persistent-volume feature that is not documented by Deplexo. Therefore, treat SQLite persistence on Deplexo as container-local unless the Deplexo dashboard explicitly provides persistent storage for the deployed app. The GitHub Actions 5-minute fallback remains enabled and continues to use its own artifact-backed state.
+
+The existing `.github/workflows/monitor.yml` is intentionally unchanged and remains the fallback monitor.
