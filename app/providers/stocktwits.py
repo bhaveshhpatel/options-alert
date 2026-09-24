@@ -1,98 +1,100 @@
-import json
-from datetime import datetime, timezone
+import time
+from datetime import datetime, timedelta, timezone
+
 import requests
-from requests.auth import HTTPBasicAuth
+
 from ..models import SocialEvent
 
 
-class StocktwitsAuthError(RuntimeError):
-    """Raised when Firestream rejects the configured credentials."""
+class StocktwitsApiAuthError(RuntimeError):
+    """Raised when the Stocktwits REST API rejects the configured API key."""
 
 
-class StocktwitsFirestream:
-    def __init__(self, username, password, url="https://firestream.stocktwits.com/stream"):
-        self.username, self.password, self.url = username, password, url
+class StocktwitsApi:
+    """Poll the documented Stocktwits REST API for messages by symbol.
 
-    def events(self, seconds=180):
-        started = datetime.now(timezone.utc)
-        for event, _seq_id in self.events_with_cursor():
-            if (datetime.now(timezone.utc) - started).total_seconds() > seconds:
-                break
-            yield event
+    The REST API is symbol-scoped, so it is intentionally a polling provider,
+    not a replacement for Firestream's global SSE feed. Set symbols explicitly
+    (for example, symbols discovered by another provider) to keep API usage
+    predictable on the free tier.
+    """
 
-    def events_with_cursor(self, seq_id=None, keepalive=True, read_timeout=75):
-        """Yield (SocialEvent, seq_id) from the authorized Firestream SSE feed.
+    def __init__(
+        self,
+        api_key,
+        symbols,
+        username="",
+        base_url="https://api.stocktwitsapi.com/v1",
+        lookback_minutes=10,
+        limit=100,
+        session=None,
+    ):
+        self.api_key = api_key.strip()
+        self.symbols = tuple(dict.fromkeys(s.upper().lstrip("$") for s in symbols if s.strip()))
+        self.username = username.strip()
+        self.base_url = base_url.rstrip("/")
+        self.lookback_minutes = max(1, int(lookback_minutes))
+        self.limit = max(1, min(int(limit), 1000))
+        self.session = session or requests.Session()
 
-        Firestream documents seq_id recovery for roughly 24 hours, so callers can
-        persist/reuse the latest cursor when a long-lived connection reconnects.
-        """
-        params = {"seq_id": seq_id} if seq_id else {}
-        headers = {
-            "Accept": "text/event-stream",
-            "Accept-Encoding": "gzip",
-            "Cache-Control": "no-cache",
-        }
-        with requests.get(
-            self.url,
-            params=params,
-            auth=HTTPBasicAuth(self.username, self.password),
-            headers=headers,
-            stream=True,
-            timeout=(15, read_timeout),
-        ) as response:
+    def events(self):
+        if not self.api_key or not self.symbols:
+            return
+
+        end = datetime.now(timezone.utc)
+        start = end - timedelta(minutes=self.lookback_minutes)
+
+        for symbol in self.symbols:
+            params = {
+                "symbol": symbol,
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+                "limit": self.limit,
+                "order": "asc",
+                "primaryOnly": "false",
+            }
+            if self.username:
+                params["username"] = self.username
+
+            response = self.session.get(
+                f"{self.base_url}/messages",
+                params=params,
+                headers={
+                    "x-api-key": self.api_key,
+                    "Accept": "application/json",
+                },
+                timeout=20,
+            )
             if response.status_code == 401:
-                raise StocktwitsAuthError(
-                    "Stocktwits Firestream returned HTTP 401 Unauthorized. "
-                    "The configured credentials are not authorized for Firestream. "
-                    "Verify the login and that the Stocktwits account has Firestream access."
+                raise StocktwitsApiAuthError(
+                    "Stocktwits REST API returned HTTP 401 Unauthorized. "
+                    "Check STOCKTWITS_API_KEY."
+                )
+            if response.status_code == 403:
+                raise RuntimeError(
+                    "Stocktwits REST API returned HTTP 403 Forbidden. "
+                    "The API key/plan may not permit this request or lookback window."
+                )
+            if response.status_code == 429:
+                raise RuntimeError(
+                    "Stocktwits REST API returned HTTP 429 Too Many Requests. "
+                    "Reduce polling frequency or number of symbols."
                 )
             response.raise_for_status()
-            data_lines = []
-            current_seq = seq_id
-            for raw_line in response.iter_lines(decode_unicode=True):
-                if raw_line is None:
-                    continue
-                line = raw_line.strip()
-                if not line:
-                    if data_lines:
-                        payload = "\n".join(data_lines)
-                        data_lines = []
-                        event, current_seq = self._parse(payload, current_seq)
-                        if event:
-                            yield event, current_seq
-                    elif not keepalive:
-                        continue
-                    continue
-                if line.startswith("data:"):
-                    data_lines.append(line[5:].strip())
-                elif line.startswith("id:"):
-                    current_seq = line[3:].strip() or current_seq
 
-            if data_lines:
-                event, current_seq = self._parse("\n".join(data_lines), current_seq)
+            payload = response.json()
+            for message in payload.get("messages", []):
+                event = self._parse_message(message)
                 if event:
-                    yield event, current_seq
+                    yield event
 
-    def _parse(self, payload, fallback_seq=None):
-        try:
-            obj = json.loads(payload)
-        except Exception:
-            return None, fallback_seq
-
-        # Firestream wraps messages in {object, action, data, time, seq_id}.
-        if isinstance(obj.get("data"), dict):
-            data = obj["data"]
-        else:
-            data = obj
-
-        text = data.get("body") or data.get("text") or data.get("message") or ""
+    @staticmethod
+    def _parse_message(message):
+        text = message.get("body") or message.get("text") or ""
         if not text:
-            return None, obj.get("seq_id") or fallback_seq
+            return None
 
-        user = data.get("user") or {}
-        author = user.get("username") or user.get("name") or "unknown"
-        event_id = str(data.get("id") or obj.get("seq_id") or hash(payload))
-        ts = data.get("created_at") or obj.get("time") or data.get("timestamp")
+        ts = message.get("created_at")
         try:
             created = (
                 datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
@@ -102,6 +104,17 @@ class StocktwitsFirestream:
         except Exception:
             created = datetime.now(timezone.utc)
 
-        url = data.get("url")
-        next_seq = obj.get("seq_id") or fallback_seq
-        return SocialEvent("stocktwits", event_id, author, text, created, url), next_seq
+        symbols = message.get("symbols") or []
+        ticker = symbols[0] if symbols else ""
+        url = message.get("url")
+        stocktwits_id = message.get("stocktwits_id") or message.get("id")
+        event_id = str(stocktwits_id)
+
+        return SocialEvent(
+            "stocktwits_api",
+            event_id,
+            message.get("username") or message.get("name") or "unknown",
+            text,
+            created,
+            url,
+        )
