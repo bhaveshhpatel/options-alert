@@ -41,7 +41,7 @@ jobs:
           )"
           if [ -n "${artifact_id:-}" ]; then
             echo "Restoring state artifact ${artifact_id}"
-            gh api               -H "Accept: application/vnd.github+json"               "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip"               > /tmp/flow-agent-state.zip
+            gh api -H "Accept: application/vnd.github+json"               "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip"               > /tmp/flow-agent-state.zip
             unzip -o /tmp/flow-agent-state.zip -d data/runtime
             test -f data/runtime/agent.db
           else
@@ -62,7 +62,16 @@ jobs:
           PROVIDER_RUNTIME_SECONDS: '180'
           CORRELATION_WINDOW_MINUTES: ${{ vars.CORRELATION_WINDOW_MINUTES }}
           STATE_DB_PATH: data/runtime/agent.db
-        run: python -m app.runner
+        shell: bash
+        run: |
+          set +e
+          timeout --signal=TERM --kill-after=20s 180s python -m app.runner --live
+          rc=$?
+          if [ "$rc" -eq 124 ] || [ "$rc" -eq 143 ]; then
+            echo "Three-minute monitoring window completed."
+            exit 0
+          fi
+          exit "$rc"
 
       - name: Persist state artifact
         if: always()
