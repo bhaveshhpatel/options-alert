@@ -11,6 +11,7 @@ from .correlator import correlate
 from .detector import detect
 from .providers.stocktwits import StocktwitsAuthError, StocktwitsFirestream
 from .providers.x_api import XRecentSearch
+from .providers.public_feed import PublicFeed
 from .state import StateStore
 from .whatsapp import send_whatsapp_text
 
@@ -226,6 +227,16 @@ def run_live():
     else:
         log.info("X provider is not configured; X polling is disabled.")
 
+    for index, url in enumerate(cfg.public_feed_urls, start=1):
+        t = threading.Thread(
+            target=_public_feed_loop,
+            args=(cfg, engine, url),
+            name=f"public-feed-{index}",
+            daemon=True,
+        )
+        threads.append(t)
+        t.start()
+
     if not threads:
         raise SystemExit("No live providers configured.")
 
@@ -267,6 +278,17 @@ def _stocktwits_loop(cfg, engine):
             log.exception("Stocktwits stream disconnected; reconnecting.")
             time.sleep(backoff)
             backoff = min(backoff * 2, 60)
+
+
+def _public_feed_loop(cfg, engine, url):
+    interval = max(15, cfg.public_feed_poll_seconds)
+    while True:
+        try:
+            for event in PublicFeed(url).events():
+                engine.on_event(event)
+        except Exception:
+            log.exception("Public feed poll failed: %s", url)
+        time.sleep(interval)
 
 
 def _x_poll_loop(cfg, engine):
