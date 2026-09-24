@@ -1,0 +1,6 @@
+date,ticker,signal,corroboration,notes
+2026-09-21,P,repeat_sweeper_buying,Stocktwits community + options activity,Control for news and index inclusion
+2026-09-21,SECZ,repeat_activity,options activity,Control for prior momentum
+2026-09-02,EWZ,repeat_buying,Stocktwits community,Control for political/news catalyst
+2026-08-26,UNP,repeat_buying,Stocktwits community,Counterexample for evaluation
+2026-06-11,TRGP,bull_sweeper,options activity,Counterexample for evaluation
