@@ -10,15 +10,23 @@ def _int_env(name, default):
     return int(value) if value else default
 
 
+def _csv_env(name):
+    return tuple(value.strip() for value in os.getenv(name, "").split(",") if value.strip())
+
+
 @dataclass(frozen=True)
 class Config:
     stocktwits_username: str = os.getenv("STOCKTWITS_USERNAME", "").strip()
     stocktwits_password: str = os.getenv("STOCKTWITS_PASSWORD", "")
     x_bearer_token: str = os.getenv("X_BEARER_TOKEN", "").strip()
+    # Default X query explicitly includes WallStJesus while retaining the
+    # broader flow-language search. Override with X_QUERY when desired.
     x_query: str = os.getenv(
         "X_QUERY",
-        '("sweeper" OR "repeat buying" OR "repeat activity") -is:retweet',
+        '(from:WallStJesus OR "WallStJesus" OR "sweeper" OR "repeat buying" OR "repeat activity") -is:retweet',
     ).strip()
+    public_feed_urls: tuple[str, ...] = _csv_env("PUBLIC_FEED_URLS")
+    public_feed_poll_seconds: int = _int_env("PUBLIC_FEED_POLL_SECONDS", 30)
     alert_webhook_url: str = os.getenv("ALERT_WEBHOOK_URL", "").strip()
 
     # WhatsApp is completely optional. If these are unset, alerts are still
