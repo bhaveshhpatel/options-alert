@@ -9,7 +9,7 @@ from .alerts import format_alert, send_webhook
 from .config import Config
 from .correlator import correlate
 from .detector import detect
-from .providers.stocktwits import StocktwitsFirestream
+from .providers.stocktwits import StocktwitsAuthError, StocktwitsFirestream
 from .providers.x_api import XRecentSearch
 from .state import StateStore
 from .whatsapp import send_whatsapp_text
@@ -256,6 +256,13 @@ def _stocktwits_loop(cfg, engine):
                     engine.store.set_cursor("stocktwits", seq_id)
                 engine.on_event(event)
             backoff = 2
+        except StocktwitsAuthError as exc:
+            log.error(
+                "Stocktwits Firestream authentication failed: %s. "
+                "The monitor will not retry invalid credentials.",
+                exc,
+            )
+            return
         except Exception:
             log.exception("Stocktwits stream disconnected; reconnecting.")
             time.sleep(backoff)
